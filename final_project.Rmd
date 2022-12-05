@@ -1,0 +1,46 @@
+---
+title: "MA678_final_project"
+author: "Nuo Chen"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+	warning = FALSE)
+library(tidyverse)
+library(magrittr)
+```
+
+
+# Abstract
+
+The data can be found at https://www.kaggle.com/datasets/adityadesai13/used-car-dataset-ford-and-mercedes?select=cclass.csv
+
+# Introduction
+
+
+| column names      | explanation                                     |
+| :--               | :-----                                          |
+| model             | model of Audi                                   |
+| year              | registration year                               |
+| price             | price in £                                      |
+| transmission      | type of gearbox                                 |
+| mileage           | distance used                                   |
+| fuel type         | engine fuel                                     |
+| tax               | road tax                                        |
+| mpg               | miles per gallon                                |
+| engineSize        | size in litres                                  |
+                
+
+# Method
+
+## EDA
+
+```{r}
+## Read the data
+audi = read.csv("D:/Downloads/audi.csv")
+
+```
+

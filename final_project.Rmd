@@ -10,7 +10,14 @@ output:
 knitr::opts_chunk$set(echo = TRUE, message = FALSE,
 	warning = FALSE)
 library(tidyverse)
+library(rstanarm)
 library(magrittr)
+library(ggplot2)
+library(psych)
+library(lme4)
+library(caret)
+library(modelr)
+library(sjPlot)
 ```
 
 
@@ -23,12 +30,12 @@ The data can be found at https://www.kaggle.com/datasets/adityadesai13/used-car-
 
 | column names      | explanation                                     |
 | :--               | :-----                                          |
-| model             | model of Audi                                   |
+| model             | audi model                                      |
 | year              | registration year                               |
 | price             | price in £                                      |
 | transmission      | type of gearbox                                 |
 | mileage           | distance used                                   |
-| fuel type         | engine fuel                                     |
+| fuelType          | engine fuel                                     |
 | tax               | road tax                                        |
 | mpg               | miles per gallon                                |
 | engineSize        | size in litres                                  |
@@ -42,5 +49,106 @@ The data can be found at https://www.kaggle.com/datasets/adityadesai13/used-car-
 ## Read the data
 audi = read.csv("D:/Downloads/audi.csv")
 
+
+audi$age = 2022 - audi$year
+audi = audi %>% subset(select = -c(year))
+
+
+table(audi$model)
+audi = audi %>% group_by(model) %>% filter(n() >= 10)
 ```
+
+```{r}
+ggplot(audi, aes(x=factor(model)))+geom_bar(stat="count", width=0.7, fill="steelblue")
+ggplot(audi, aes(x=age)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="orange") 
+ggplot(audi, aes(x=price)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="blue") 
+ggplot(audi, aes(x=factor(transmission)))+geom_bar(stat="count", width=0.7, fill="steelblue")
+ggplot(audi, aes(x=mileage)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="cyan") 
+ggplot(audi, aes(x=factor(fuelType)))+geom_bar(stat="count", width=0.7, fill="steelblue")
+ggplot(audi, aes(x=tax)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="red") 
+ggplot(audi, aes(x=mpg)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="yellow") 
+ggplot(audi, aes(x=engineSize)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 64) + geom_density(alpha=.2, fill="green")
+```
+
+
+
+
+For all the model type, 
+
+
+# finding relationships
+
+```{r}
+ggplot(audi) + aes(x=age,y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')
+ggplot(audi) + aes(x=factor(transmission),y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3,size=0.9)
+ggplot(audi) + aes(x=mileage,y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')
+ggplot(audi) + aes(x=factor(fuelType),y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3)
+ggplot(audi) + aes(x=tax,y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')
+ggplot(audi) + aes(x=mpg,y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')
+ggplot(audi) + aes(x=engineSize,y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')
+```
+```{r}
+cor(audi[,unlist(lapply(audi, is.numeric))])
+col = audi %>% filter(model == " A4" & fuelType == 'Diesel')
+ggplot(audi) + aes(x=tax,y=mpg) + geom_point() +   geom_smooth(formula = 'y ~ x', method = "lm") 
+ggplot(audi) + aes(x=age,y=mileage) + geom_point() +   geom_smooth(formula = 'y ~ x', method = "lm") 
+```
+```{r}
+typeof(audi$model)
+summary(audi)
+```
+
+
+# Modeling
+
+
+
+
+```{r}
+audi$log_price = log(audi$price)
+audi$log_mileage = log(audi$mileage)
+audi$log_age = log(audi$age)
+audi$log_mpg = log(audi$mpg)
+fit1 = lmer(log_price~factor(transmission) + log_age+I(log_age^2)+factor(fuelType)+log_mpg + I(log_mpg^2) +(1+engineSize|model), data = audi)
+summary(fit1)
+plot(fit1, alpha= 0.55)
+tab_model(fit1)
+```
+```{r}
+fit2 = lmer(log_price~factor(transmission) + log_age+I(log_age^2)+factor(fuelType)+log_mpg +(1+engineSize|model), data = audi, refresh = 0)
+summary(fit2)
+plot(fit2, alpha= 0.55)
+tab_model(fit2)
+```
+
+
+## Cross Validation
+
+```{r}
+cv  <- crossv_kfold(audi, k = 10)
+
+model1  <- map(cv$train, ~lmer(log_price~factor(transmission) + log_mileage+I(log_mileage^2)+log_age+I(log_age^2)+factor(fuelType)+log_mpg + I(log_mpg^2) +(1+engineSize|model), data = .))
+model2  <- map(cv$train, ~lmer(log_price~factor(transmission) +log_age+I(log_age^2)+factor(fuelType)+log_mpg + I(log_mpg^2) +(1+engineSize|model), data = .))
+model3  <- map(cv$train, ~lmer(log_price~factor(transmission) + log_mileage+I(log_mileage^2)+factor(fuelType)+log_mpg + I(log_mpg^2) +(1+engineSize|model), data = .))
+
+
+get_pred  <- function(model, test_data){
+  data  <- as.data.frame(test_data)
+  pred  <- add_predictions(data, model)
+  return(pred)
+}
+
+pred1  <- map2_df(model1, cv$test, get_pred, .id = "Run")
+pred2  <- map2_df(model2, cv$test, get_pred, .id = "Run")
+pred3  <- map2_df(model3, cv$test, get_pred, .id = "Run")
+
+MSE1  <- pred1 %>% group_by(Run) %>% summarise(MSE = mean( (log_price - pred)^2))
+MSE2  <- pred2 %>% group_by(Run) %>% summarise(MSE = mean( (log_price - pred)^2))
+MSE3  <- pred3 %>% group_by(Run) %>% summarise(MSE = mean( (log_price - pred)^2))
+
+mean(MSE1$MSE)
+mean(MSE2$MSE)
+mean(MSE3$MSE)
+```
+
 

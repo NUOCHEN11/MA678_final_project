@@ -17,18 +17,37 @@ library(psych)
 library(lme4)
 library(caret)
 library(modelr)
-library(sjPlot)
+library(gridExtra)
+library(loo)
+library(merTools)
 ```
 
 
 # Abstract
 
+
+Audi AG is a German automotive manufacturer of luxury vehicles headquartered in Ingolstadt, Bavaria, Germany. With a large number of users, I access the variables
+
+I built a multilevel model with group level `model`. And it
+
+
 The data can be found at https://www.kaggle.com/datasets/adityadesai13/used-car-dataset-ford-and-mercedes?select=cclass.csv
 
 # Introduction
 
+Cars bring many conveniences to our life. Many people buy a new car when they need one. However, for most international students who can't decide whether stay or leave after graduation, buying a used car is the best choice to balance the cost and quality of life. Therefore, I want to make an analysis of the price of used cars, based on their model, registration year, and so on.
 
-| column names      | explanation                                     |
+The most important factor when people consider the price of used cars is age. In most cases, the age of the car implies the usage, the wear and tear, and the appearance of a used car. And many people will also think about the mpg (miles per gallon) as today's oil prices increase. Usually smaller age and a 'relative' lower mpg will make the price higher. But different people may have different preference. For example, Audi A4 is offered as a sedan and more rugged “Allroad” wagon. People who choose Audi A4 are likely to pursue the engine power, which means they are willing pay more for a bigger engine size. On the other hand, the major buyers of Audi Q5 are mostly commuters focusing on comfort and flexibility, so 2.0 litres engine size can meet their basic requirement.
+
+Meanwhile, higher number on the second letter of the model could mean a larger, more powerful car;  as in the A8, and it could also mean a near-identical car with a different body style, as in the Q8. For either distinctions, it will be more expensive. Therefore, I choose the multilevel model to analyze the influences of different variables and to forecast the price of used car
+
+## Data
+
+I found this dataset at Kaggle (https://www.kaggle.com/datasets/adityadesai13/used-car-dataset-ford-and-mercedes?select=cclass.csv).
+
+The data contains the price and corresponding car information from used-car market in UK. Here, I choose the data of Audi on the used-car market for analysis as I like this brand very well and I consider to buy one. The data contains 10668 observations, from all types of Audi models. Here is the description of each variables:
+
+| column names      | description                                     |
 | :--               | :-----                                          |
 | model             | audi model                                      |
 | year              | registration year                               |
@@ -41,95 +60,117 @@ The data can be found at https://www.kaggle.com/datasets/adityadesai13/used-car-
 | engineSize        | size in litres                                  |
                 
 
+
 # Method
 
-## EDA
+## Data Preparation
 
-```{r}
+In the dataset, the registration year of the car is not a numeric variable. To make it meaningful, I set an `age` variable which equals 2021 - `year` as the dataset was collected 2 years ago. There are also 57 observations with `engineSize` equals to 0 (`fuelType` is not 'Hybrid' and `mpg` not equal to 0). I believe that there may be some error when collecting these data so I discarded them.
+
+Besides, when models get more complex, small sample sizes can result in models that are over-fitted. Here I chose the minimum sample size to be 30. I counted the number of each model and dropped all the models(e.g. A2, R8, RS5...) that have less than 30 observations.
+
+
+```{r, include=FALSE}
 ## Read the data
 audi = read.csv("D:/Downloads/audi.csv")
 
-
-audi$age = 2022 - audi$year
+## Set an age variable
+audi$age = 2021 - audi$year
 audi = audi %>% subset(select = -c(year))
 
 
-table(audi$model)
-audi = audi %>% group_by(model) %>% filter(n() >= 10)
-```
+#table(audi$engineSize)
+#col = audi %>% filter(engineSize == 0)
 
-```{r}
-ggplot(audi, aes(x=factor(model)))+geom_bar(stat="count", width=0.7, fill="steelblue")
-ggplot(audi, aes(x=age)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="orange") 
-ggplot(audi, aes(x=price)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="blue") 
-ggplot(audi, aes(x=factor(transmission)))+geom_bar(stat="count", width=0.7, fill="steelblue")
-ggplot(audi, aes(x=mileage)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="cyan") 
-ggplot(audi, aes(x=factor(fuelType)))+geom_bar(stat="count", width=0.7, fill="steelblue")
-ggplot(audi, aes(x=tax)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="red") 
-ggplot(audi, aes(x=mpg)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="yellow") 
-ggplot(audi, aes(x=engineSize)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 64) + geom_density(alpha=.2, fill="green")
+## Drop invalid data
+audi = audi %>% filter(engineSize > 0)
+audi = audi %>% group_by(model) %>% filter(n() >= 30)
+
 ```
 
 
+## Exploratory Data Analysis
 
+Now, the dataset has 10496 variables of 9 variables. Before modeling, I explored the data trying to figure out their main characteristics.
 
-For all the model type, 
+```{r echo=FALSE, fig.height=4, fig.width=11, fig.cap="numbers of Audi models"}
+ggplot(audi, aes(x=factor(model)))+geom_bar(stat="count", width=0.7, fill="steelblue")+ xlab("Audi model")
 
-
-# finding relationships
-
-```{r}
-ggplot(audi) + aes(x=age,y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')
-ggplot(audi) + aes(x=factor(transmission),y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3,size=0.9)
-ggplot(audi) + aes(x=mileage,y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')
-ggplot(audi) + aes(x=factor(fuelType),y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3)
-ggplot(audi) + aes(x=tax,y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')
-ggplot(audi) + aes(x=mpg,y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')
-ggplot(audi) + aes(x=engineSize,y=log(price),color=as.factor(model))+ylab("Price vs Age")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')
-```
-```{r}
-cor(audi[,unlist(lapply(audi, is.numeric))])
-col = audi %>% filter(model == " A4" & fuelType == 'Diesel')
-ggplot(audi) + aes(x=tax,y=mpg) + geom_point() +   geom_smooth(formula = 'y ~ x', method = "lm") 
-ggplot(audi) + aes(x=age,y=mileage) + geom_point() +   geom_smooth(formula = 'y ~ x', method = "lm") 
-```
-```{r}
-typeof(audi$model)
-summary(audi)
 ```
 
 
-# Modeling
+Figure 1 shows the popularity of different Audi models among people. In general, those models with "A"(Base models) designation are more popular than those with "Q"(SUV models) in the used-car market, while "RS"(The sportiest “RennSport” models) series are most unpopular. There are also many people buying Audi TT(a two-door sports car) because of its attractive appearance and performance. Additionally, most people choose "A3" and "Q3" as they are relatively cheaper than those with larger numbers(e.g. A8 & Q8) when the model is not too old (e.g. A1 & Q3). 
 
+I also plot the distributions of `age`, `price`, `transmission`, `mileage`, `fuelType`, `tax`, `mpg`, and `engineSize`(See the appendix), among which `age`, `price`, `mileage`, and `mpg` are all left-skewed distributed and have heavy tails on the right side.
 
+```{r echo=FALSE, fig.height=4.2, fig.width=11, fig.cap="relationship between price and age"}
+logprice_age = ggplot(audi) + aes(x=age,y=log(price),color=as.factor(model))+xlab("age")+ylab("log(price)")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x') + ggtitle("(a)log(price) vs age")
 
+logprice_logage = ggplot(audi) + aes(x=log(age),y=log(price),color=as.factor(model))+xlab("log(age)")+ylab("log(price)")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x') + ggtitle("(a)log(price) vs log(age)")
 
-```{r}
-audi$log_price = log(audi$price)
-audi$log_mileage = log(audi$mileage)
-audi$log_age = log(audi$age)
-audi$log_mpg = log(audi$mpg)
-fit1 = lmer(log_price~factor(transmission) + log_age+I(log_age^2)+factor(fuelType)+log_mpg + I(log_mpg^2) +(1+engineSize|model), data = audi)
-summary(fit1)
-plot(fit1, alpha= 0.55)
-tab_model(fit1)
-```
-```{r}
-fit2 = lmer(log_price~factor(transmission) + log_age+I(log_age^2)+factor(fuelType)+log_mpg +(1+engineSize|model), data = audi, refresh = 0)
-summary(fit2)
-plot(fit2, alpha= 0.55)
-tab_model(fit2)
+grid.arrange(logprice_age, logprice_logage, ncol = 2)
 ```
 
+Figure 2 displays the relationship between `price` and `age`. An increase in age leads to a decrease in price in all kinds of models. Meanwhile, figure 2(a) demonstrates a stronger linearity than figure 2(b), so I decided to use `age` in the modeling part even though it is left-skewed distributed.
+
+
+```{r echo=FALSE, fig.height=4.2, fig.width=8, fig.cap="relationship between price and engineSize"}
+ggplot(audi) + aes(x=engineSize,y=log(price),color=as.factor(model))+ylab("log(price)")+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x') + ggtitle("(b)price vs engineSize")
+```
+
+Figure 3 illustrates the relationship between `price` and `engineSize`. For those `engineSize` no greater than 3.0 litres, bigger `engineSize` means a more expensive price. For those `engineSize` greater than 3.0, Audi A5, A6, Q7, and Q8 buyers are willing to pay more for a bigger engine, while A7, A8, and RS4 buyers are not.
+
+I also visualized the relationships between price and other variables(see appendix) which help in the modeling part.
+
+
+## Modeling
+
+As different Audi models have different designs, it seems that the `price` of used car would be modeled with a multilevel model. Based on the results of the EDA part, I took a log transformation of `price` and `mpg` to make them better suited for a linear fit. And I also took `mileage1000` = `mileage`/1000, since the range of  mileage is too big compare with other variables.
+
+```{r include=FALSE}
+## take the log transformation of variables `age`, `price`, `mileage`, and `mpg`
+log_audi = audi %>% subset(select = c(model, age, transmission, fuelType, tax, engineSize))
+log_audi$log_mpg = log(audi$mpg)
+log_audi$mileage1000 = (audi$mileage)/1000
+log_audi$log_price = log(audi$price)
+```
+
+
+```{r echo=FALSE}
+cor(log_audi[,unlist(lapply(log_audi, is.numeric))])
+```
+
+```{r include=FALSE}
+tax_logmpg = ggplot(log_audi) + aes(x=tax,y=log_mpg) + geom_point() +   geom_smooth(formula = 'y ~ x', method = "lm") + ggtitle("(a)log(mpg) vs tax") 
+age_mileage1000 = ggplot(log_audi) + aes(x=age,y=mileage1000) + geom_point() +   geom_smooth(formula = 'y ~ x', method = "lm") + ggtitle("(b)mileage/1000 vs age") 
+```
+
+
+```{r echo=FALSE, fig.height=8, fig.width=8, fig.cap="Variables with high correlations"}
+grid.arrange(tax_logmpg, age_mileage1000, ncol = 1, nrow = 2)
+```
+
+Here I accessed the correlation matrix of variables. The correlation between `log_mpg` and `tax` is quite significant, indicating that these two variables are highly related. Instead of mpg, people may think road tax is less important since it only costs a little compared to the overall price of a car and the oil cost. Therefore, I decided to drop it.
 
 ## Cross Validation
 
-```{r}
-cv  <- crossv_kfold(audi, k = 10)
+Figure 5(b) shows that the variable `age` and `mileage` has a high correlation as well. Since they are both important factors when people think of a used car, I am going to use cross validation to compare two models: One with `age`, and the other with `mileage`
 
-model1  <- map(cv$train, ~lmer(log_price~factor(transmission) + log_mileage+I(log_mileage^2)+log_age+I(log_age^2)+factor(fuelType)+log_mpg + I(log_mpg^2) +(1+engineSize|model), data = .))
-model2  <- map(cv$train, ~lmer(log_price~factor(transmission) +log_age+I(log_age^2)+factor(fuelType)+log_mpg + I(log_mpg^2) +(1+engineSize|model), data = .))
-model3  <- map(cv$train, ~lmer(log_price~factor(transmission) + log_mileage+I(log_mileage^2)+factor(fuelType)+log_mpg + I(log_mpg^2) +(1+engineSize|model), data = .))
+### Multilevel model with `age`, dorping `mileage`.
+```{r warning=FALSE}
+fit1 = lmer(log_price~factor(transmission)+age+factor(fuelType)+log_mpg+engineSize +(1+factor(transmission)+age+factor(fuelType)+log_mpg+engineSize|model), data = log_audi)
+```
+### Multilevel model with `mileage`, dorping `age`.
+```{r warning=FALSE}
+fit2 = lmer(log_price~factor(transmission)+mileage1000+factor(fuelType)+log_mpg+engineSize +(1+factor(transmission)+mileage1000+factor(fuelType)+log_mpg+engineSize|model), data = log_audi)
+```
+
+
+#```{r include=FALSE}
+cv  <- crossv_kfold(log_audi, k = 5)
+
+model1  <- map(cv$train, ~lmer(log_price~factor(transmission)+age+factor(fuelType)+log_mpg+engineSize +(1+factor(transmission)+age+factor(fuelType)+log_mpg+engineSize|model), data = .))
+model2  <- map(cv$train, ~lmer(log_price~factor(transmission)+mileage1000+factor(fuelType)+log_mpg+engineSize +(1+factor(transmission)+mileage1000+factor(fuelType)+log_mpg+engineSize|model), data = .))
 
 
 get_pred  <- function(model, test_data){
@@ -140,15 +181,116 @@ get_pred  <- function(model, test_data){
 
 pred1  <- map2_df(model1, cv$test, get_pred, .id = "Run")
 pred2  <- map2_df(model2, cv$test, get_pred, .id = "Run")
-pred3  <- map2_df(model3, cv$test, get_pred, .id = "Run")
 
 MSE1  <- pred1 %>% group_by(Run) %>% summarise(MSE = mean( (log_price - pred)^2))
 MSE2  <- pred2 %>% group_by(Run) %>% summarise(MSE = mean( (log_price - pred)^2))
-MSE3  <- pred3 %>% group_by(Run) %>% summarise(MSE = mean( (log_price - pred)^2))
-
-mean(MSE1$MSE)
-mean(MSE2$MSE)
-mean(MSE3$MSE)
 ```
 
+#```{r}
+c(mean(MSE1$MSE),mean(MSE2$MSE))
+```
+
+Comparing these two models, model 1 which takes `age` into account has a lower mean squared error. That is quite interesting because, from a mathematical point of view, the lower mileage means smaller wear and tears, but the year is not such deterministic(e.g. rarely used cars may have an older age, but smaller wear and tears compared with often used cars). However, the fact is, the model using `age` fits better than the model using `mileage`.
+
+
+
+\newpage
+
+# Result
+
+## Interpretation
+
+```{r include=FALSE}
+#fit6 = lmer(log_price~factor(transmission) + log_age+factor(fuelType)+log_mpg + engineSize +(1+engineSize+factor(transmission)+factor(fuelType)+log_mpg+ log_age|model)+(1+log_age+engineSize|transmission), data = log_audi)
+#summary(fit6)
+#plot(fit6, alpha= 0.55)
+#tab_model(fit6)
+```
+
+First, let's look at the summary of the model, Here all the variables are statistically significant except fuelType of petrol. As its coefficient is almost zero and the 95% confidence interval is between -0.04 and 0.05, it has little influence on the model. Meanwhile, we can see the r-squared statistics at the bottom of the table. The marginal r-squared tells that approximately 64.9% of the data can be explained by the fixed effects, and the conditional r-squared means that approximately 92.8% of the data can be explained by the fixed effects and random effects, that is the whole model.
+
+
+```{r include=TRUE, echo=FALSE}
+tab_model(fit1, show.re.var = FALSE)
+```
+
+
+
+```{r echo=FALSE, fig.height=4, fig.width=8, fig.cap="Fixed Effect of the model"}
+plotFEsim(FEsim(fit1, n.sims = 1000), level = 0.9, stat = 'median', intercept = FALSE)
+```
+
+And the following tables are the summary of random effects of Audi model (only display first 7 models - that is "A" series).
+
+```{r include=TRUE, echo=FALSE}
+round(ranef(fit1)$model, digits = 3)[1:7,]
+```
+
+And now, we are able to interpret this model. If I want an Audi A7 with automatic transmission and consuming petrol, I will get the following formula:
+
+$$ log(Price) = (11.89+1.338) +(0.00-0.040)  +  (-0.13-0.002) \times Age+ (-0.42-0.243)\times log(MPG) + (0.17-0.149) \times EngineSize $$ 
+For every unit increase in Age, the prediction of the log(price) will decrease by 0.132. For every unit increase in log(MPG), the prediction of the log(price) will decrease by 0.663. And for every unit increase in EngineSize, the prediction of the log(price) will increase by 0.021. Thus, Audi A7 buyers most focus on age and the mpg and do not care about the engineSize relatively.
+
+## Validation
+
+```{r echo=FALSE, fig.height=5, fig.width=11, fig.cap="Checking the fitness of model"}
+res_plot = plot(fit1, alpha= 0.55, main = "(a)residual plot")
+qq_plot = qqmath(fit1,main = "(b)qq plot")
+grid.arrange(res_plot, qq_plot, ncol = 2)
+```
+
+The residual plot and the Q-Q plot show the overall fitness of the model. This model fitted well when estimating higher prices, and not as well when comes to lower prices. But the residual is okay with an approximately 0 mean. And for qq plot, most points are on a straight line. 
+
+
+## Discussion
+
+To conclude, I built a multilevel model with group level `model` to estimate the price of used-car in the British market, based on the car's age, transmission, fuel type, mpg, and engine size. In general, age and mpg have negative impacts on the price while engine size has a positive impact. However, different Audi model has a different random effect. For example, for Audi RS4, an increase in engine size will make the price decrease. Meanwhile, the validation of the model is quite well, based on the model check and r-squared statistics.
+
+This model has several uses - people who want to buy a used car can use this model to seek a good value price, and the used-car sellers can set the price based on the predicted value to make their cars more competitive. However, it also has some limitations. First, this model performed not well on lower price levels - probably that is because people are less price-sensitive, or maybe other variables(not included in this dataset) are relatively more important on the lower price level. Second, the model only considered the Audi cars in the UK. So people can not use it for other brands, nor in other countries. 
+
+The future step is to consider more factors in the model(e.g. color, condition of appearance, interior decoration), and for different brand levels, country levels, etc.
+
+
+# Reference
+
+[1] Aditya Desai, _100,000 UK Used Car Data set_, https://www.kaggle.com/datasets/adityadesai13/used-car-dataset-ford-and-mercedes?select=cclass.csv
+
+[2] Tyler Duffy, _The Complete Audi Buying Guide: Every Model, Explained_, https://www.gearpatrol.com/cars/a540578/audi-models/
+
+
+
+\newpage
+
+# Appendix
+
+## Exploratory Data Analysis
+
+```{r include=FALSE}
+age_plot = ggplot(audi, aes(x=age)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 24) + geom_density(alpha=.2, fill="orange") 
+price_plot = ggplot(audi, aes(x=price)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="blue") 
+trans_plot = ggplot(audi, aes(x=factor(transmission)))+geom_bar(stat="count", width=0.7, fill="steelblue")
+mileage_plot = ggplot(audi, aes(x=mileage)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="cyan") 
+fuel_plot = ggplot(audi, aes(x=factor(fuelType)))+geom_bar(stat="count", width=0.7, fill="steelblue")
+tax_plot = ggplot(audi, aes(x=tax)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="red") 
+mpg_plot = ggplot(audi, aes(x=mpg)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 25) + geom_density(alpha=.2, fill="yellow") 
+engine_plot = ggplot(audi, aes(x=engineSize)) + geom_histogram(aes(y=..density..), colour="black", fill="white", bins = 64) + geom_density(alpha=.2, fill="green")
+```
+
+```{r echo=FALSE, fig.height=10, fig.width=11, fig.cap="Variable distribution"}
+grid.arrange(price_plot, age_plot, trans_plot, mileage_plot, fuel_plot, tax_plot, mpg_plot, engine_plot,ncol = 2, nrow = 4)
+```
+
+```{r include=FALSE}
+logprice_trans = ggplot(audi) + aes(x=factor(transmission),y=log(price),color=as.factor(model))+geom_jitter(alpha=0.3,size=0.9)+ theme(legend.position = "none")
+logprice_fuel = ggplot(audi) + aes(x=factor(fuelType),y=log(price),color=as.factor(model)) + geom_jitter(alpha=0.3) + theme(legend.position = "none")
+logprice_mileage = ggplot(audi) + aes(x=mileage,y=log(price),color=as.factor(model))+geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x') + theme(legend.position = "none")
+logprice_logmileage = ggplot(audi) + aes(x=log(mileage),y=log(price),color=as.factor(model)) + geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x') + theme(legend.position = "none")
+logprice_mpg = ggplot(audi) + aes(x=mpg,y=log(price),color=as.factor(model)) + geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')+ theme(legend.position = "none")
+logprice_logmpg = ggplot(audi) + aes(x=log(mpg),y=log(price),color=as.factor(model)) + geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')+ theme(legend.position = "none")
+logprice_tax = ggplot(audi) + aes(x=tax,y=log(price),color=as.factor(model)) + geom_jitter(alpha=0.3,size=0.8) + geom_smooth(aes(color = factor(model)), method = "lm", se = FALSE, formula = 'y ~ x')+ theme(legend.position = "none")
+```
+
+```{r echo=FALSE, fig.height=12, fig.width=11, fig.cap="Relationship between price and other variables"}
+grid.arrange(logprice_trans, logprice_fuel, logprice_mileage, logprice_logmileage, logprice_mpg, logprice_logmpg, logprice_tax, ncol = 2, nrow = 4)
+```
 

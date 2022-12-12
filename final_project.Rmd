@@ -27,12 +27,8 @@ library(sjPlot)
 # Abstract
 
 
-Audi AG is a German automotive manufacturer of luxury vehicles headquartered in Ingolstadt, Bavaria, Germany. With a large number of users, I access the variables
+Audi AG is a German automotive manufacturer of luxury vehicles headquartered in Ingolstadt, Bavaria, Germany, with a large number of users. In this report, I accessed the data of Audi in the UK's used-car market, use cross-validation to find the best variable to predict the price, built a multilevel model with group level `model`, and checked the model fit.
 
-I built a multilevel model with group level `model`. And it
-
-
-The data can be found at https://www.kaggle.com/datasets/adityadesai13/used-car-dataset-ford-and-mercedes?select=audi.csv
 
 # Introduction
 
@@ -202,7 +198,7 @@ Comparing these two models, model 1 which takes `age` into account has a lower m
 ## Interpretation
 
 
-First, let's look at the summary of the model, Here all the variables are statistically significant except fuelType of petrol. As its coefficient is almost zero and the 95% confidence interval is between -0.04 and 0.05, it has little influence on the model. Meanwhile, we can see the r-squared statistics at the bottom of the table. The marginal r-squared tells that approximately 64.9% of the data can be explained by the fixed effects, and the conditional r-squared means that approximately 92.8% of the data can be explained by the fixed effects and random effects, that is the whole model.
+First, let's look at the summary of the model, Here all the variables are statistically significant except fuelType of petrol. As its coefficient is almost zero and the 95% confidence interval is between -0.04 and 0.05, it has little influence on the model. Meanwhile, we can see the r-squared statistics at the bottom of the table. The marginal r-squared tells that approximately 90.1% of the data can be explained by the fixed effects.
 
 
 ```{r include=TRUE, echo=FALSE}

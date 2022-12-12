@@ -166,7 +166,7 @@ fit2 = lmer(log_price~factor(transmission)+mileage1000+factor(fuelType)+log_mpg+
 ```
 
 
-#```{r include=FALSE}
+```{r include=FALSE}
 cv  <- crossv_kfold(log_audi, k = 5)
 
 model1  <- map(cv$train, ~lmer(log_price~factor(transmission)+age+factor(fuelType)+log_mpg+engineSize +(1+factor(transmission)+age+factor(fuelType)+log_mpg+engineSize|model), data = .))
@@ -186,7 +186,7 @@ MSE1  <- pred1 %>% group_by(Run) %>% summarise(MSE = mean( (log_price - pred)^2)
 MSE2  <- pred2 %>% group_by(Run) %>% summarise(MSE = mean( (log_price - pred)^2))
 ```
 
-#```{r}
+```{r}
 c(mean(MSE1$MSE),mean(MSE2$MSE))
 ```
 
@@ -200,12 +200,6 @@ Comparing these two models, model 1 which takes `age` into account has a lower m
 
 ## Interpretation
 
-```{r include=FALSE}
-#fit6 = lmer(log_price~factor(transmission) + log_age+factor(fuelType)+log_mpg + engineSize +(1+engineSize+factor(transmission)+factor(fuelType)+log_mpg+ log_age|model)+(1+log_age+engineSize|transmission), data = log_audi)
-#summary(fit6)
-#plot(fit6, alpha= 0.55)
-#tab_model(fit6)
-```
 
 First, let's look at the summary of the model, Here all the variables are statistically significant except fuelType of petrol. As its coefficient is almost zero and the 95% confidence interval is between -0.04 and 0.05, it has little influence on the model. Meanwhile, we can see the r-squared statistics at the bottom of the table. The marginal r-squared tells that approximately 64.9% of the data can be explained by the fixed effects, and the conditional r-squared means that approximately 92.8% of the data can be explained by the fixed effects and random effects, that is the whole model.
 
